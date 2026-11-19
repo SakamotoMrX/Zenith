@@ -2334,10 +2334,16 @@ fun NowPlayingScreen(
     // The moves the still is for. Not the drawers and popups, under which the
     // clip pauses but nothing moves.
     val stillMoving = collapseStarted || dockMoving || lyricsOpen || queueOpen || queueDragging
+    // Live blur on: the blurred clip must stay on screen for the whole trip to and
+    // from a panel, including a queue drag and the first frames of a close, where
+    // lyricsOpen/queueOpen are not (yet / any more) true. Otherwise the sharp still
+    // takes its place and the blur disappears for a moment.
+    val livePanelsHold = liveCanvasPanels && heroClipMounted != null && !dockMoving &&
+        (collapseStarted || queueDragging)
     // Whether the still is on screen in the clip's place: while it moves, and
     // until the clip has painted the same frame again.
     fun stillTakesOver(): Boolean = still() != null && CanvasStills.fresh &&
-        !(liveCanvasPanels && (lyricsOpen || queueOpen)) &&
+        !(liveCanvasPanels && (lyricsOpen || queueOpen)) && !livePanelsHold &&
         (collapseStarted || dockMoving || lyricsOpen || queueOpen || queueDragging || !canvasRendered)
     // A portrait still is the clip's whole picture, not the banner's square:
     // top-aligned across the player's width, as the clip is contained, and as
@@ -3130,7 +3136,7 @@ fun NowPlayingScreen(
                                     (dockMoving && !clipFullscreen && !(liveCanvasPanels && (lyricsOpen || queueOpen)))
                                 ) 0f
                                 else (
-                                    if (liveCanvasPanels && (lyricsOpen || queueOpen || clipHeldForPanels)) 1f
+                                    if (liveCanvasPanels && (lyricsOpen || queueOpen || clipHeldForPanels || livePanelsHold)) 1f
                                     else if (clipFullscreen) {
                                         // Spotify layar penuh: frame melebur lebih awal langsung
                                         // ke backdrop, tanpa bercampur dengan cover statis.
@@ -4286,7 +4292,7 @@ fun NowPlayingScreen(
                                     // again by the time it unmounts.
                                     // Whole while the clip's still is standing in for it.
                                     alpha = (
-                                        if (liveCanvasPanels && (lyricsOpen || queueOpen || clipHeldForPanels)) {
+                                        if (liveCanvasPanels && (lyricsOpen || queueOpen || clipHeldForPanels || livePanelsHold)) {
                                             // The clip is blurred live behind the panel, both ways. A
                                             // full-screen Spotify clip's cover does not fly: it fades in
                                             // at the header on the way in and out again on the way back.
@@ -4548,7 +4554,7 @@ fun NowPlayingScreen(
                                             // The clip's still in place of the cover —
                                             // see [stillTakesOver] — and, for the reason
                                             // above, drawn only while it can be seen.
-                                            stillTakesOver() || !canvasRendered ||
+                                            stillTakesOver() || !canvasRendered || livePanelsHold ||
                                             (liveCanvasPanels && (lyricsOpen || queueOpen)) ||
                                             (heroMode && canvasCover.floatValue < 1f)
                                         ) {
