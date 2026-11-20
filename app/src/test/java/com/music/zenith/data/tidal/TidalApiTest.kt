@@ -1,5 +1,7 @@
 package com.music.zenith.data.tidal
 
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
 import kotlinx.coroutines.runBlocking
 import okhttp3.mockwebserver.Dispatcher
 import okhttp3.mockwebserver.MockResponse
@@ -7,6 +9,7 @@ import okhttp3.mockwebserver.MockWebServer
 import okhttp3.mockwebserver.RecordedRequest
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -36,11 +39,13 @@ class TidalApiTest {
 
     private fun route(path: String, vararg answers: MockResponse) { routes[path] = ArrayDeque(answers.toList()) }
     private fun ok(body: String) = MockResponse().setBody(body)
+    private fun expired() = MockResponse().setResponseCode(401)
+        .setBody("""{"status":401,"subStatus":11003,"userMessage":"The token has expired. (Expired on time)"}""")
     private fun api() = TidalApi(
         baseUrl = server.url("/v1/").toString(),
         tokenUrl = server.url("/token").toString(),
         load = { stored },
-        save = { stored = it },
+        replace = { old, new -> (stored?.refresh == old.refresh).also { if (it) stored = new } },
     )
     private fun apiCalls() = seen.count { it.requestUrl!!.encodedPath.startsWith("/v1/") }
 
@@ -76,20 +81,20 @@ class TidalApiTest {
 
     @Test fun refreshesOnceOn401ThenGivesUp() = runBlocking {
         route("/token", ok("""{"access_token":"A2","expires_in":600}"""))
-        route("/v1/sessions", MockResponse().setResponseCode(401), ok("""{"userId":7,"countryCode":"ID"}"""))
+        route("/v1/sessions", expired(), ok("""{"userId":7,"countryCode":"ID"}"""))
         assertEquals(TidalResult.Ok(7L to "ID"), api().session())
         assertEquals("A2", stored!!.access)
         assertEquals("R1", stored!!.refresh)
 
         seen.clear()
-        route("/v1/sessions", MockResponse().setResponseCode(401))
+        route("/v1/sessions", expired())
         assertEquals(TidalResult.Unauthorized, api().session())
         assertEquals(2, apiCalls())
     }
 
     @Test fun refreshRefusedIsUnauthorized() = runBlocking {
         route("/token", MockResponse().setResponseCode(400))
-        route("/v1/sessions", MockResponse().setResponseCode(401))
+        route("/v1/sessions", expired())
         assertEquals(TidalResult.Unauthorized, api().session())
         assertEquals(1, apiCalls())
     }
@@ -135,5 +140,45 @@ class TidalApiTest {
     @Test fun missingTrackIsUnavailable() = runBlocking {
         route("/v1/tracks/12/playbackinfopostpaywall", MockResponse().setResponseCode(404))
         assertEquals(TidalResult.Unavailable(404), api().playback(12, "LOSSLESS"))
+    }
+
+    @Test fun unplayable401IsUnavailableWithoutRefresh() = runBlocking {
+        route(
+            "/v1/tracks/13/playbackinfopostpaywall",
+            MockResponse().setResponseCode(401).setBody("""{"status":401,"subStatus":4005,"userMessage":"Asset is not ready for playback"}"""),
+        )
+        assertEquals(TidalResult.Unavailable(401), api().playback(13, "LOSSLESS"))
+        assertEquals(0, seen.count { it.requestUrl!!.encodedPath == "/token" })
+    }
+
+    @Test fun concurrentExpiriesRefreshOnce() = runBlocking {
+        stored = stored!!.copy(expiresAtMs = 0)
+        route("/token", ok("""{"access_token":"A9","refresh_token":"R9","expires_in":600}""").setBodyDelay(300, java.util.concurrent.TimeUnit.MILLISECONDS))
+        route("/v1/sessions", ok("""{"userId":7,"countryCode":"ID"}"""))
+        val a = api()
+        val b = api()
+        val results = listOf(
+            async(Dispatchers.IO) { a.session() },
+            async(Dispatchers.IO) { b.session() },
+        ).map { it.await() }
+        results.forEach { assertTrue(it.toString(), it is TidalResult.Ok) }
+        assertEquals(1, seen.count { it.requestUrl!!.encodedPath == "/token" })
+        assertEquals("R9", stored!!.refresh)
+    }
+
+    @Test fun signOutDuringRefreshStaysSignedOut() = runBlocking {
+        stored = stored!!.copy(expiresAtMs = 0)
+        server.dispatcher = object : Dispatcher() {
+            override fun dispatch(request: RecordedRequest): MockResponse {
+                synchronized(seen) { seen += request }
+                if (request.requestUrl!!.encodedPath == "/token") {
+                    stored = null // the user signed out while this refresh was in flight
+                    return ok("""{"access_token":"A9","refresh_token":"R9","expires_in":600}""")
+                }
+                return ok("""{"userId":7,"countryCode":"ID"}""")
+            }
+        }
+        assertEquals(TidalResult.Unauthorized, api().session())
+        assertNull(stored)
     }
 }

@@ -41,7 +41,7 @@ class TidalSourceTest {
 
     private fun source(picked: String? = null) = TidalSource(
         SourceConfig(kind = SourceKind.TIDAL, enabled = true, qualityOptions = TidalSource.QUALITIES, pickedQuality = picked),
-        TidalApi(server.url("/v1/").toString(), server.url("/token").toString(), { tokens }, { tokens = it }),
+        TidalApi(server.url("/v1/").toString(), server.url("/token").toString(), { tokens }, { _, new -> tokens = new; true }),
     )
 
     private fun bts() = Base64.getEncoder().encodeToString(

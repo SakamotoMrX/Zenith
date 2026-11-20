@@ -71,8 +71,6 @@ jobs:
           set -o pipefail
           chmod +x gradlew
           ./gradlew :app:testProdDebugUnitTest --build-cache --stacktrace \
-            --tests 'com.music.zenith.data.tidal.*' --tests 'com.music.zenith.data.sources.*' \
-            --tests 'com.music.zenith.download.*' --tests 'com.music.zenith.playback.*' \
             -Dorg.gradle.jvmargs="-Xmx5g -XX:MaxMetaspaceSize=1g -Dfile.encoding=UTF-8" 2>&1 | tee unit-tests.log
 
       - name: Upload test report

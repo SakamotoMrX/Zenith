@@ -60,6 +60,14 @@ object TidalTokenStore {
         _signedIn.value = true
     }
 
+    /** [save], but only while [old] is still the stored sign-in; false when it was replaced or cleared. */
+    @Synchronized
+    fun replaceIf(old: TidalTokens, new: TidalTokens): Boolean {
+        if (cached?.refresh != old.refresh) return false
+        save(new)
+        return true
+    }
+
     @Synchronized
     fun clear() {
         cached = null

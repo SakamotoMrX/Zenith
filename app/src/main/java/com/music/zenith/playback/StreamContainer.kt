@@ -89,6 +89,8 @@ object StreamContainer {
      */
     fun manifestMimeOf(url: String): String? =
         declared[url]
+            // An inline manifest says what it is; no need to depend on [declared] still holding it.
+            ?: MimeTypes.APPLICATION_MPD.takeIf { url.startsWith("data:application/dash+xml", ignoreCase = true) }
             ?: when (url.substringBefore('?').substringAfterLast('.').lowercase(Locale.ROOT)) {
                 "m3u8" -> MimeTypes.APPLICATION_M3U8
                 "mpd" -> MimeTypes.APPLICATION_MPD

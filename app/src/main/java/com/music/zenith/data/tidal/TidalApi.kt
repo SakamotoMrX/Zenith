@@ -11,6 +11,8 @@ import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.longOrNull
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
@@ -58,7 +60,8 @@ class TidalApi(
     baseUrl: String = "https://api.tidal.com/v1/",
     private val tokenUrl: String = TidalAuth.TOKEN_URL,
     private val load: () -> TidalTokens? = TidalTokenStore::load,
-    private val save: (TidalTokens) -> Unit = TidalTokenStore::save,
+    /** Stores [new] only while [old] is still what is stored: a sign-out mid-refresh must stay a sign-out. */
+    private val replace: (old: TidalTokens, new: TidalTokens) -> Boolean = TidalTokenStore::replaceIf,
     private val now: () -> Long = System::currentTimeMillis,
 ) {
     private val base: HttpUrl = baseUrl.toHttpUrl()
@@ -101,13 +104,14 @@ class TidalApi(
             tokens = refreshed(tokens) ?: return@withContext TidalResult.Unauthorized
         }
         var answer = call(path, query, tokens)
-        if (answer.first == 401) {
+        // Only an expired token is worth a refresh; Tidal also says 401 for a track it won't play.
+        if (answer.first == 401 && isExpiredToken(answer.second)) {
             tokens = refreshed(tokens) ?: return@withContext TidalResult.Unauthorized
             answer = call(path, query, tokens)
         }
         val (code, body) = answer
         when {
-            code == 401 -> TidalResult.Unauthorized
+            code == 401 && isExpiredToken(body) -> TidalResult.Unauthorized
             code == 429 -> TidalResult.Failed("Rate limited by Tidal")
             code < 0 -> TidalResult.Failed(body)
             code in 400..499 -> TidalResult.Unavailable(code)
@@ -132,10 +136,28 @@ class TidalApi(
         }
     }
 
-    private suspend fun refreshed(old: TidalTokens): TidalTokens? =
-        runCatching { TidalAuth.refresh(old.refresh, tokenUrl) }.getOrNull()
-            ?.let { it.copy(userId = it.userId ?: old.userId, countryCode = it.countryCode ?: old.countryCode) }
-            ?.also(save)
+    /**
+     * One refresh for every caller that found [stale] expired: Tidal rotates
+     * refresh tokens, so a second POST of the same one would be refused (and
+     * may revoke the session). Whoever gets the lock second reuses the result.
+     */
+    private suspend fun refreshed(stale: TidalTokens): TidalTokens? = refreshLock.withLock {
+        val current = load() ?: return@withLock null // signed out meanwhile
+        if (current.access != stale.access) return@withLock current
+        val fresh = runCatching { TidalAuth.refresh(current.refresh, tokenUrl) }.getOrNull()
+            ?.let { it.copy(userId = it.userId ?: current.userId, countryCode = it.countryCode ?: current.countryCode) }
+            ?: return@withLock null
+        fresh.takeIf { replace(current, it) }
+    }
+
+    private fun isExpiredToken(body: String): Boolean =
+        runCatching { json.parseToJsonElement(body).jsonObject["userMessage"]?.jsonPrimitive?.content }
+            .getOrNull()?.startsWith("The token has expired") == true
+
+    private companion object {
+        /** Process-wide: every TidalApi (each source, each probe) shares the one stored token. */
+        val refreshLock = Mutex()
+    }
 
     private fun parseTrack(o: JsonObject): TidalTrack? {
         fun s(obj: JsonObject?, k: String) = obj?.get(k)?.takeIf { it is kotlinx.serialization.json.JsonPrimitive }

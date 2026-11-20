@@ -81,4 +81,19 @@ class TidalManifestTest {
     @Test fun mpdOfIgnoresOtherUrls() {
         assertNull(TidalManifest.mpdOf("https://example.com/a.mpd"))
     }
+
+    @Test fun inlineDashIsDashWithoutDeclaring() {
+        assertEquals("application/dash+xml", StreamContainer.manifestMimeOf(TidalManifest.DASH_DATA_PREFIX + "PE1QRC8+"))
+    }
+
+    @Test fun replaceIfRefusesAfterSignOut() {
+        val t1 = TidalTokens("A1", "R1", 0, 1, "ID")
+        val t2 = TidalTokens("A2", "R2", 0, null, null)
+        TidalTokenStore.save(t1)
+        assertTrue(TidalTokenStore.replaceIf(t1, t2))
+        assertEquals("ID", TidalTokenStore.load()!!.countryCode)
+        TidalTokenStore.clear()
+        assertTrue(!TidalTokenStore.replaceIf(t2, t1))
+        assertNull(TidalTokenStore.load())
+    }
 }
