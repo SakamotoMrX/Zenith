@@ -1417,4 +1417,5 @@
     <string name="tidal_sign_in_failed">Tidal sign-in failed: %1$s</string>
     <string name="tidal_quality_hires">Hi-Res (up to 24-bit)</string>
     <string name="tidal_quality_lossless">Lossless (16-bit)</string>
+    <string name="tidal_open_browser">Browser</string>
 </resources>

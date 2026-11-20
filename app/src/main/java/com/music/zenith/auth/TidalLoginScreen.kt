@@ -26,6 +26,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -71,6 +72,7 @@ fun TidalLoginScreen(
 ) {
     val pkce = remember { TidalPkce.create() }
     val scope = rememberCoroutineScope()
+    val uriHandler = LocalUriHandler.current
     var webView by remember { mutableStateOf<WebView?>(null) }
     var canGoBack by remember { mutableStateOf(false) }
     var pasted by remember { mutableStateOf("") }
@@ -104,6 +106,10 @@ fun TidalLoginScreen(
                 .padding(horizontal = 16.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
+            // Same PKCE attempt as the WebView, so the address it lands on can be pasted back here.
+            TextButton(enabled = !busy, onClick = { uriHandler.openUri(TidalAuth.loginUrl(pkce)) }) {
+                Text(stringResource(R.string.tidal_open_browser))
+            }
             PillTextField(
                 value = pasted,
                 onValueChange = { pasted = it },

@@ -1203,4 +1203,5 @@
     <string name="tidal_sign_in_failed">Tidal 로그인 실패: %1$s</string>
     <string name="tidal_quality_hires">Hi-Res (최대 24비트)</string>
     <string name="tidal_quality_lossless">Lossless (16비트)</string>
+    <string name="tidal_open_browser">브라우저</string>
 </resources>
