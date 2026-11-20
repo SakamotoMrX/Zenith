@@ -1,5 +1,6 @@
 package com.music.zenith.download
 
+import com.music.zenith.data.tidal.TidalManifest
 import com.music.zenith.data.DebugLog as Log
 import com.music.zenith.data.Http
 import com.music.zenith.data.innertube.PlayerClient
@@ -265,6 +266,10 @@ object Downloader {
         headers: Map<String, String>,
         statedCodec: String? = null,
     ): Probe? = withContext(Dispatchers.IO) {
+        // An inline manifest (Tidal's DASH) is already in hand: nothing to fetch, nothing to sniff.
+        TidalManifest.mpdOf(url)?.let { mpd ->
+            return@withContext if ("<MPD" in mpd) Probe.Manifest(dash = true) else null
+        }
         runCatching {
             val request = Request.Builder().url(url)
                 .header("Range", "bytes=0-${PROBE_BYTES - 1}")

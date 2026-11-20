@@ -1,5 +1,12 @@
 package com.music.zenith.download
 
+import com.music.zenith.data.tidal.TidalManifest
+import kotlinx.coroutines.runBlocking
+import okhttp3.mockwebserver.Dispatcher
+import okhttp3.mockwebserver.MockResponse
+import okhttp3.mockwebserver.MockWebServer
+import okhttp3.mockwebserver.RecordedRequest
+import okio.Buffer
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotSame
@@ -103,5 +110,77 @@ class ManifestFileTest {
         )
         assertEquals("init.mp4", init)
         assertEquals(listOf("seg-1.m4s", "seg-2.m4s"), media)
+    }
+
+    // ── Inline (data:) manifests, as Tidal hands them over ─────────────────
+
+    private fun mpd(base: String) = """<MPD type="static"><Period><AdaptationSet><Representation codecs="flac">
+<SegmentTemplate timescale="4096" initialization="${base}0.mp4?token=t" media="${base}${'$'}Number${'$'}.mp4?token=t" startNumber="1">
+<SegmentTimeline><S d="12288" r="1"/></SegmentTimeline></SegmentTemplate></Representation></AdaptationSet></Period></MPD>"""
+
+    private fun dataUri(xml: String) =
+        TidalManifest.DASH_DATA_PREFIX + java.util.Base64.getEncoder().encodeToString(xml.toByteArray())
+
+    private fun serving(routes: Map<String, ByteArray>, seen: MutableList<String>) = MockWebServer().apply {
+        dispatcher = object : Dispatcher() {
+            override fun dispatch(request: RecordedRequest): MockResponse {
+                val path = request.requestUrl!!.encodedPath
+                synchronized(seen) { seen += path }
+                return routes[path]?.let { MockResponse().setBody(Buffer().write(it)) } ?: MockResponse().setResponseCode(404)
+            }
+        }
+        start()
+    }
+
+    @Test
+    fun `inline dash manifest is written without fetching the manifest`() = runBlocking {
+        val seen = mutableListOf<String>()
+        val server = serving(
+            mapOf("/t/0.mp4" to init("fLaC"), "/t/1.mp4" to segments[0], "/t/2.mp4" to segments[1]),
+            seen,
+        )
+        try {
+            val out = ByteArrayOutputStream()
+            ManifestFile.write(tmp.root, dataUri(mpd(server.url("/t/").toString())), emptyMap(), true, "flac", out) { _, _ -> }
+            assertEquals(listOf("/t/0.mp4", "/t/1.mp4", "/t/2.mp4"), seen)
+            assertArrayEquals(frames.reduce { a, b -> a + b }, out.toByteArray().copyOfRange(42, out.size()))
+        } finally {
+            server.shutdown()
+        }
+    }
+
+    @Test(expected = IllegalStateException::class)
+    fun `relative segments in an inline manifest are refused`(): Unit = runBlocking {
+        ManifestFile.write(tmp.root, dataUri(mpd("")), emptyMap(), true, "flac", ByteArrayOutputStream()) { _, _ -> }
+    }
+
+    @Test
+    fun `http manifest still fetched`() = runBlocking {
+        val seen = mutableListOf<String>()
+        val server = MockWebServer()
+        val routes = mutableMapOf<String, ByteArray>()
+        server.dispatcher = object : Dispatcher() {
+            override fun dispatch(request: RecordedRequest): MockResponse {
+                val path = request.requestUrl!!.encodedPath
+                synchronized(seen) { seen += path }
+                return routes[path]?.let { MockResponse().setBody(Buffer().write(it)) } ?: MockResponse().setResponseCode(404)
+            }
+        }
+        server.start()
+        try {
+            routes["/m.mpd"] = mpd("seg/").toByteArray()
+            routes["/seg/0.mp4"] = init("fLaC")
+            routes["/seg/1.mp4"] = segments[0]
+            routes["/seg/2.mp4"] = segments[1]
+            ManifestFile.write(tmp.root, server.url("/m.mpd").toString(), emptyMap(), true, "flac", ByteArrayOutputStream()) { _, _ -> }
+            assertEquals(listOf("/m.mpd", "/seg/0.mp4", "/seg/1.mp4", "/seg/2.mp4"), seen)
+        } finally {
+            server.shutdown()
+        }
+    }
+
+    @Test
+    fun `inline dash probes as a manifest without a request`() = runBlocking {
+        assertEquals(Downloader.Probe.Manifest(dash = true), Downloader.probe(dataUri(mpd("https://x/")), emptyMap()))
     }
 }

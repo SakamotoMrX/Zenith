@@ -1,5 +1,6 @@
 package com.music.zenith.download
 
+import com.music.zenith.data.tidal.TidalManifest
 import com.music.zenith.data.Http
 import com.music.zenith.download.Mp4Boxes.boxes
 import com.music.zenith.download.Mp4Boxes.child
@@ -66,14 +67,17 @@ internal object ManifestFile {
             }
         }
 
-        val base = url.toHttpUrlOrNull() ?: error("Invalid manifest URL")
-        val index = String(fetch(url), Charsets.UTF_8)
+        // An inline (data:) manifest has no address of its own, so its segments must be absolute.
+        val inline = TidalManifest.mpdOf(url)
+        val base = if (inline != null) null else url.toHttpUrlOrNull() ?: error("Invalid manifest URL")
+        val index = inline ?: String(fetch(url), Charsets.UTF_8)
         val (initRef, mediaRefs) = if (dash) {
             OfflineDash.parse(index).let { it.initialization to it.media }
         } else {
             hlsSegments(index)
         }
-        fun resolve(ref: String) = base.resolve(ref)?.toString() ?: error("Invalid segment URL")
+        fun resolve(ref: String) = (base?.resolve(ref) ?: ref.toHttpUrlOrNull()
+            ?: error(if (base == null) "Relative segment in inline manifest" else "Invalid segment URL")).toString()
         val total = mediaRefs.size + 1L
 
         val init = fetch(resolve(initRef))
