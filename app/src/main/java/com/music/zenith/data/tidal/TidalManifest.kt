@@ -52,7 +52,7 @@ object TidalManifest {
     private fun dash(p: TidalPlayback, durationSec: Int?): SourceStream? {
         val mpd = runCatching { String(Base64.getDecoder().decode(p.manifestBase64)) }.getOrNull() ?: return null
         if ("ContentProtection" in mpd) return null
-        if (!Regex("""codecs\s*=\s*"(f[lL][aA]C)"""").containsMatchIn(mpd)) return null
+        if (!Regex("""codecs\s*=\s*"flac"""", RegexOption.IGNORE_CASE).containsMatchIn(mpd)) return null
         val url = DASH_DATA_PREFIX + Base64.getEncoder().encodeToString(mpd.toByteArray())
         StreamContainer.declare(url, "dash")
         return SourceStream(

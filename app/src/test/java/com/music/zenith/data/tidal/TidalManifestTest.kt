@@ -58,6 +58,10 @@ class TidalManifestTest {
         assertEquals("application/dash+xml", StreamContainer.manifestMimeOf(s.url))
     }
 
+    @Test fun dashCodecMatchIgnoresCase() {
+        assertNotNull(TidalManifest.toStream(playback("application/dash+xml", mpd.replace("codecs=\"flac\"", "codecs=\"fLaC\""))))
+    }
+
     @Test fun dashWithContentProtectionIsNull() {
         val protected = mpd.replace("<SegmentTemplate", "<ContentProtection schemeIdUri=\"urn:uuid:x\"/><SegmentTemplate")
         assertNull(TidalManifest.toStream(playback("application/dash+xml", protected)))
