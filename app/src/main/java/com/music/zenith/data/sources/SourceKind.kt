@@ -127,6 +127,21 @@ enum class SourceKind(
         rank = 1,
     ),
 
+    /**
+     * The owner's own Tidal account, signed in on the Sources screen. Asked
+     * after the sources the user added and before JioSaavn and YouTube, and
+     * — like every lossless kind — only while the ceiling is Lossless; see
+     * [AudioQuality.permits][com.music.zenith.data.settings.permits].
+     */
+    TIDAL(
+        label = "Tidal",
+        detail = "Your Tidal account: FLAC up to 24-bit, played and downloaded when quality is Lossless.",
+        labels = listOf("FLAC", "Hi-Res"),
+        needsServer = false,
+        canServeLossless = true,
+        rank = 1,
+    ),
+
     JIOSAAVN(
         label = "JioSaavn",
         detail = "Optional JioSaavn streams up to 320kbps AAC/MP4. Catalogue matching can select the wrong song.",
