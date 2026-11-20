@@ -112,6 +112,7 @@ class ZenithApplication : Application(), SingletonImageLoader.Factory, Configura
         // threads racing to create it. Joined before onCreate returns, so
         // nothing that runs after startup can see any of them half open.
         val backgroundInit = thread(name = "startup-init") {
+            com.music.zenith.data.tidal.TidalTokenStore.init(this)
             SourceRegistry.init(this)
             AndroidStreamHooks.initInnerTubeX(this)
             // Its own directory: canvas clips are looping video, not audio, and
