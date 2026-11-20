@@ -1409,4 +1409,12 @@
     <string name="no_audio_version">No audio version found for this video</string>
     <string name="no_video_version">No video version found for this song</string>
     <string name="version_switch_in_party">Everyone in Listen Together hears the same version</string>
+    <string name="tidal_sign_in">Sign in to Tidal</string>
+    <string name="tidal_sign_out">Sign out</string>
+    <string name="tidal_sign_in_hint">Not signed in. Tap to sign in to your Tidal account.</string>
+    <string name="tidal_paste_hint">Paste the address you landed on after signing in</string>
+    <string name="tidal_paste_use">Use</string>
+    <string name="tidal_sign_in_failed">Tidal sign-in failed: %1$s</string>
+    <string name="tidal_quality_hires">Hi-Res (up to 24-bit)</string>
+    <string name="tidal_quality_lossless">Lossless (16-bit)</string>
 </resources>

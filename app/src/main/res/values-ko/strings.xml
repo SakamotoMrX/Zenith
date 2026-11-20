@@ -1195,4 +1195,12 @@
     <string name="pipeline_pcm_data_rate">PCM 데이터 전송률</string>
     <string name="spotify_import_language_preference">언어 선호도</string>
     <string name="spotify_import_language_hint">예: 펀자브어, 마라티어, 한국어…</string>
+    <string name="tidal_sign_in">Tidal에 로그인</string>
+    <string name="tidal_sign_out">로그아웃</string>
+    <string name="tidal_sign_in_hint">로그인되지 않았습니다. 눌러서 Tidal 계정에 로그인하세요.</string>
+    <string name="tidal_paste_hint">로그인 후 이동한 페이지 주소를 붙여넣으세요</string>
+    <string name="tidal_paste_use">사용</string>
+    <string name="tidal_sign_in_failed">Tidal 로그인 실패: %1$s</string>
+    <string name="tidal_quality_hires">Hi-Res (최대 24비트)</string>
+    <string name="tidal_quality_lossless">Lossless (16비트)</string>
 </resources>

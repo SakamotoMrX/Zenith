@@ -1,5 +1,8 @@
 package com.music.zenith
 
+import com.music.zenith.data.tidal.TidalTokenStore
+import com.music.zenith.auth.signOutOfTidal
+import com.music.zenith.auth.TidalLoginScreen
 import androidx.compose.ui.unit.sp
 
 import android.Manifest
@@ -848,6 +851,7 @@ private fun ZenithApp(
     // after it.
     var showDiscordLogin by remember { mutableStateOf(false) }
     var showSpotifyLogin by remember { mutableStateOf(false) }
+    var showTidalLogin by remember { mutableStateOf(false) }
     var discordDialog by remember { mutableStateOf<DiscordDialog?>(null) }
     var songActions by remember { mutableStateOf<Song?>(null) }
     // Song Info hidup di luar menu supaya menu bisa menutup di belakangnya.
@@ -3421,6 +3425,7 @@ private fun ZenithApp(
                                 onEditWebDav = { showWebDavEditor = true },
                                 onEditSmb = { showSmbEditor = true },
                                 onConfirmJioSaavn = { confirmJioSaavn = true },
+                                onSignInTidal = { showTidalLogin = true },
                             )
                         } else if (pageRoute == AppRoute.Downloads) {
                             DownloadManagerPage(
@@ -6859,6 +6864,47 @@ private fun ZenithApp(
                             AppSettings.setSpotifySpdcToken(token)
                             showSpotifyLogin = false
                         },
+                    )
+                }
+            }
+        }
+
+        // ---- Tidal sign-in (full screen WebView), out here for the same reason as Spotify's ----
+        if (showTidalLogin) {
+            BackHandler { showTidalLogin = false }
+            val tidalSignedIn by TidalTokenStore.signedIn.collectAsStateWithLifecycle()
+            Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+                Column(Modifier.fillMaxSize()) {
+                    Row(
+                        Modifier
+                            .fillMaxWidth()
+                            .statusBarsPadding()
+                            .padding(horizontal = 8.dp, vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        IconButton(onClick = { showTidalLogin = false }) {
+                            Icon(
+                                Icons.Rounded.Close,
+                                contentDescription = stringResource(R.string.close),
+                                tint = MaterialTheme.colorScheme.onBackground,
+                            )
+                        }
+                        Text(
+                            stringResource(R.string.tidal_sign_in),
+                            style = MaterialTheme.typography.titleMedium,
+                            color = MaterialTheme.colorScheme.onBackground,
+                            modifier = Modifier.weight(1f),
+                        )
+                        if (tidalSignedIn) {
+                            TextButton(onClick = {
+                                signOutOfTidal()
+                                showTidalLogin = false
+                            }) { Text(stringResource(R.string.tidal_sign_out)) }
+                        }
+                    }
+                    TidalLoginScreen(
+                        modifier = Modifier.navigationBarsPadding(),
+                        onDone = { showTidalLogin = false },
                     )
                 }
             }

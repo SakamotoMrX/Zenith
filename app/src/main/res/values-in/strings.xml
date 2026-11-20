@@ -1550,4 +1550,12 @@
     <string name="pipeline_pcm_data_rate">Laju data PCM</string>
     <string name="spotify_import_language_preference">Preferensi bahasa</string>
     <string name="spotify_import_language_hint">mis. Punjabi, Marathi, Korea…</string>
+    <string name="tidal_sign_in">Masuk ke Tidal</string>
+    <string name="tidal_sign_out">Keluar</string>
+    <string name="tidal_sign_in_hint">Belum masuk. Ketuk untuk masuk ke akun Tidal kamu.</string>
+    <string name="tidal_paste_hint">Tempel alamat halaman setelah masuk</string>
+    <string name="tidal_paste_use">Pakai</string>
+    <string name="tidal_sign_in_failed">Gagal masuk ke Tidal: %1$s</string>
+    <string name="tidal_quality_hires">Hi-Res (hingga 24-bit)</string>
+    <string name="tidal_quality_lossless">Lossless (16-bit)</string>
 </resources>

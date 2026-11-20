@@ -1,5 +1,7 @@
 package com.music.zenith.ui.screens
 
+import com.music.zenith.data.sources.TidalSource
+import com.music.zenith.data.tidal.TidalTokenStore
 import com.music.zenith.ui.icons.SfIcons
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -136,6 +138,8 @@ fun SourcesScreen(
     onEditSmb: () -> Unit,
     /** Opens the full-window warning before JioSaavn is opted into. */
     onConfirmJioSaavn: () -> Unit,
+    /** Opens the full-screen Tidal sign-in, hosted at the activity like the other WebView logins. */
+    onSignInTidal: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
@@ -151,6 +155,7 @@ fun SourcesScreen(
     val smbShare by AppSettings.smbShare.collectAsStateWithLifecycle()
     val smbUsername by AppSettings.smbUsername.collectAsStateWithLifecycle()
     val smbPassword by AppSettings.smbPassword.collectAsStateWithLifecycle()
+    val tidalSignedIn by TidalTokenStore.signedIn.collectAsStateWithLifecycle()
 
     /** Last known reachability per source, filled in as the probes come back. */
     val health = remember { mutableStateMapOf<String, SourceHealth>() }
@@ -161,10 +166,15 @@ fun SourcesScreen(
     // was any good, and the only place a manifest that fails validation gets to
     // say why. Except an addon waiting on a lossless output: it is not to be
     // contacted at all until one is connected, and connecting one re-runs this.
+    // Tidal has no server to point at, but an account that can lapse: probed whenever it is signed in.
     val probeKey = configs.filter { it.kind.needsServer }
-        .joinToString { "${it.id}@${it.baseUrl}@${it.checkValidLossless}" } + "@${losslessOutput.capable}"
+        .joinToString { "${it.id}@${it.baseUrl}@${it.checkValidLossless}" } +
+        "@${losslessOutput.capable}@tidal=$tidalSignedIn"
     LaunchedEffect(probeKey) {
-        configs.filter { it.kind.needsServer && it.isComplete && !it.awaitsLosslessOutput }.forEach { config ->
+        configs.filter {
+            (it.kind.needsServer && it.isComplete && !it.awaitsLosslessOutput) ||
+                (it.kind == SourceKind.TIDAL && tidalSignedIn)
+        }.forEach { config ->
             val source = SourceRegistry.instance(config.id) ?: return@forEach
             health[config.id] = withContext(Dispatchers.IO) {
                 runCatching { source.health() }
@@ -265,7 +275,12 @@ fun SourcesScreen(
                         // Anything the user configured is theirs to edit or
                         // delete. JioSaavn and YouTube have no address to
                         // change, so a tap on them would open an empty editor.
-                        onClick = if (config.kind.needsServer) ({ onEditSource(config) }) else null,
+                        onClick = when {
+                            config.kind.needsServer -> ({ onEditSource(config) })
+                            // Signed out: sign in. Signed in: the same screen, which also offers signing out.
+                            config.kind == SourceKind.TIDAL -> onSignInTidal
+                            else -> null
+                        },
                         // YouTube gets no switch at all — see
                         // [SourceRegistry.setEnabled] for why one would be a lie.
                         onToggle = if (config.kind == SourceKind.YOUTUBE) {
@@ -274,6 +289,8 @@ fun SourcesScreen(
                             ({ enabled ->
                                 if (config.kind == SourceKind.JIOSAAVN && enabled && !config.enabled) {
                                     onConfirmJioSaavn()
+                                } else if (config.kind == SourceKind.TIDAL && enabled && !tidalSignedIn) {
+                                    onSignInTidal()
                                 } else {
                                     SourceRegistry.setEnabled(config.id, enabled)
                                 }
@@ -799,9 +816,19 @@ private fun SourceRow(
         // Read off the stored manifest, so it can be set while the addon
         // is down or waiting on a lossless output. Only when the addon
         // actually offers a choice (two or more renditions).
-        if (config.kind == SourceKind.ADDON && config.isComplete && config.qualityOptions.isNotEmpty()) {
+        val tidalLabels = mapOf(
+            TidalSource.HI_RES to stringResource(R.string.tidal_quality_hires),
+            TidalSource.LOSSLESS to stringResource(R.string.tidal_quality_lossless),
+        )
+        val showsQuality = (config.kind == SourceKind.ADDON || config.kind == SourceKind.TIDAL) &&
+            config.isComplete && config.qualityOptions.isNotEmpty()
+        if (showsQuality) {
             AddonQualityStrip(
-                options = config.qualityOptions,
+                options = if (config.kind == SourceKind.TIDAL) {
+                    config.qualityOptions.map { it.copy(label = tidalLabels[it.value] ?: it.label) }
+                } else {
+                    config.qualityOptions
+                },
                 selected = config.activeQuality,
                 onPick = onPickQuality,
                 // Lines up with the source's name: position + gap + icon + gap.
@@ -1106,6 +1133,9 @@ private fun AudioQuality.localizedLabel(): String = stringResource(
 private fun SourceConfig.statusLine(health: SourceHealth?): String = when {
     !isComplete -> stringResource(R.string.source_setup_required)
     kind == SourceKind.JIOSAAVN -> stringResource(R.string.jiosaavn_mismatch_warning)
+    // A plain read: the screen collects this flow, so a sign-in recomposes the row.
+    kind == SourceKind.TIDAL && !TidalTokenStore.signedIn.value ->
+        stringResource(R.string.tidal_sign_in_hint)
     // Downloads are a line of their own under this one — see [SourceRow].
     health is SourceHealth.Ok -> listOfNotNull(
         health.detail,
