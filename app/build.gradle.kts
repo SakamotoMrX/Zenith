@@ -142,6 +142,10 @@ android {
         create("prod") {
             dimension = "env"
             // Matches defaultConfig — this is the package already shipped/installed.
+            // Personal fork: its own package and name, so it installs beside the
+            // official build, which is signed with a key this fork does not have.
+            applicationIdSuffix = ".tidal"
+            resValue("string", "app_name", "Zenith Tidal")
         }
     }
 
